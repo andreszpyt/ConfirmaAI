@@ -28,15 +28,12 @@ public class WebhookResource {
             @HeaderParam("apikey") String apiKey,
             MessagePayload payload) {
 
-        // Buscar clínica por instanceName
         Clinic clinic = Clinic.find("instanceName", instanceName).firstResult();
 
-        // Validar: clínica existe e apiKey está correto
         if (clinic == null || !apiKey.equals(clinic.webhookToken)) {
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
 
-        // Processar mensagem
         messageProcessorService.processIncomingMessage(payload.phone(), payload.text(), clinic);
 
         return Response.ok().build();
