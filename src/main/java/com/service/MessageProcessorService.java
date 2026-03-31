@@ -15,22 +15,49 @@ public class MessageProcessorService {
     @Inject
     IntentExtractionService intentExtractionService;
 
+    @Inject
+    AppointmentSchedulerService appointmentSchedulerService;
+
     @Transactional
     public void processIncomingMessage(String phone, String text) {
         IntentExtractionResult result = intentExtractionService.extractIntent(text);
 
         switch (result.action()) {
             case CONFIRM:
-                System.out.println("Confirmando consulta do paciente " + result.patientName());
-                break;
-            case CANCEL:
                 String cleanPhone = phone.replace("@s.whatsapp.net", "");
                 Patient patient = Patient.find("whatsappPhone", cleanPhone).firstResult();
                 if (patient != null) {
                     Appointment appointment = Appointment.find("patient = ?1 and status = 'PENDING'", patient).firstResult();
                     if (appointment != null) {
-                        appointment.status = AppointmentStatus.CANCELED;
+                        appointment.status = AppointmentStatus.CONFIRMED;
                         appointment.persist();
+                        if (appointment.quartzJobId != null) {
+                            try {
+                                appointmentSchedulerService.cancelSchedule(appointment.quartzJobId);
+                                System.out.println("[QUARTZ] Agendamento cancelado para consulta " + appointment.id);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                }
+                break;
+            case CANCEL:
+                String cleanPhoneCancel = phone.replace("@s.whatsapp.net", "");
+                Patient patientCancel = Patient.find("whatsappPhone", cleanPhoneCancel).firstResult();
+                if (patientCancel != null) {
+                    Appointment appointmentCancel = Appointment.find("patient = ?1 and status = 'PENDING'", patientCancel).firstResult();
+                    if (appointmentCancel != null) {
+                        appointmentCancel.status = AppointmentStatus.CANCELED;
+                        appointmentCancel.persist();
+                        if (appointmentCancel.quartzJobId != null) {
+                            try {
+                                appointmentSchedulerService.cancelSchedule(appointmentCancel.quartzJobId);
+                                System.out.println("[QUARTZ] Agendamento cancelado para consulta " + appointmentCancel.id);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
                     }
                 }
                 break;
