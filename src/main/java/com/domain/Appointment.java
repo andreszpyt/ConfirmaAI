@@ -27,6 +27,6 @@ public class Appointment extends PanacheEntity {
         PENDING,
         CONFIRMED,
         CANCELED,
-        COMPLETED
+        NEEDS_HUMAN
     }
 }

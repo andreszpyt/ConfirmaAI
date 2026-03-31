@@ -12,11 +12,16 @@ import com.domain.Appointment.AppointmentStatus;
 @ApplicationScoped
 public class MessageProcessorService {
 
+    private static final String CLINIC_PHONE = "5585999999999";
+
     @Inject
     IntentExtractionService intentExtractionService;
 
     @Inject
     AppointmentSchedulerService appointmentSchedulerService;
+
+    @Inject
+    MessageSenderService messageSenderService;
 
     @Transactional
     public void processIncomingMessage(String phone, String text) {
@@ -31,6 +36,7 @@ public class MessageProcessorService {
                     if (appointment != null) {
                         appointment.status = AppointmentStatus.CONFIRMED;
                         appointment.persist();
+                        messageSenderService.sendWhatsAppMessage(CLINIC_PHONE, "Notificação: Consulta do paciente " + patient.name + " foi " + result.action());
                         if (appointment.quartzJobId != null) {
                             try {
                                 appointmentSchedulerService.cancelSchedule(appointment.quartzJobId);
@@ -50,6 +56,7 @@ public class MessageProcessorService {
                     if (appointmentCancel != null) {
                         appointmentCancel.status = AppointmentStatus.CANCELED;
                         appointmentCancel.persist();
+                        messageSenderService.sendWhatsAppMessage(CLINIC_PHONE, "Notificação: Consulta do paciente " + patientCancel.name + " foi " + result.action());
                         if (appointmentCancel.quartzJobId != null) {
                             try {
                                 appointmentSchedulerService.cancelSchedule(appointmentCancel.quartzJobId);
@@ -62,7 +69,24 @@ public class MessageProcessorService {
                 }
                 break;
             case RESCHEDULE:
-                System.out.println("Remarcando consulta do paciente " + result.patientName() + " de " + result.originalTime() + " para " + result.newTime());
+                String cleanPhoneReschedule = phone.replace("@s.whatsapp.net", "");
+                Patient patientReschedule = Patient.find("whatsappPhone", cleanPhoneReschedule).firstResult();
+                if (patientReschedule != null) {
+                    Appointment appointmentReschedule = Appointment.find("patient = ?1 and status = 'PENDING'", patientReschedule).firstResult();
+                    if (appointmentReschedule != null) {
+                        appointmentReschedule.status = AppointmentStatus.NEEDS_HUMAN;
+                        appointmentReschedule.persist();
+                        messageSenderService.sendWhatsAppMessage(CLINIC_PHONE, "ALERTA: O paciente " + patientReschedule.name + " solicitou um reagendamento. Por favor, assuma o atendimento manual.");
+                        if (appointmentReschedule.quartzJobId != null) {
+                            try {
+                                appointmentSchedulerService.cancelSchedule(appointmentReschedule.quartzJobId);
+                                System.out.println("[QUARTZ] Agendamento cancelado para consulta " + appointmentReschedule.id);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                }
                 break;
             case ADD:
                 System.out.println("Adicionando nova consulta para o paciente " + result.patientName() + " em " + result.newTime());
