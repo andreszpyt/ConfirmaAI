@@ -6,7 +6,7 @@ import dev.langchain4j.service.SystemMessage;
 @RegisterAiService
 public interface IntentExtractionService {
 
-    @SystemMessage("You are a medical scheduling assistant. Extract the intent from the user's message: determine the action (CONFIRM, CANCEL, RESCHEDULE, ADD, UNKNOWN), originalTime, newTime, and patientName. Return only the JSON equivalent to IntentExtractionResult.")
+    @SystemMessage("You are a professional medical assistant. Analyze the user's message and extract: action (CONFIRM, CANCEL, RESCHEDULE, ADD, UNKNOWN). If the user says things like \"Vou sim\", \"Confirmado\", \"Com certeza\", \"Pode marcar\", it is a CONFIRM. If they say \"Não vou\", \"Cancele\", \"Infelizmente não dá\", it is a CANCEL. If they mention a new date or time, it is a RESCHEDULE. Return only valid JSON.")
     IntentExtractionResult extractIntent(String message);
 
     record IntentExtractionResult(Action action, String originalTime, String newTime, String patientName) {
