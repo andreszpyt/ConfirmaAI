@@ -2,6 +2,7 @@ package com.service;
 
 import com.ai.IntentExtractionService;
 import com.ai.IntentExtractionService.IntentExtractionResult;
+import com.domain.Clinic;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -24,7 +25,7 @@ public class MessageProcessorService {
     MessageSenderService messageSenderService;
 
     @Transactional
-    public void processIncomingMessage(String phone, String text) {
+    public void processIncomingMessage(String phone, String text, Clinic clinic) {
         IntentExtractionResult result = intentExtractionService.extractIntent(text);
 
         switch (result.action()) {
@@ -32,7 +33,7 @@ public class MessageProcessorService {
                 String cleanPhone = phone.replace("@s.whatsapp.net", "");
                 Patient patient = Patient.find("whatsappPhone", cleanPhone).firstResult();
                 if (patient != null) {
-                    Appointment appointment = Appointment.find("patient = ?1 and status = 'PENDING'", patient).firstResult();
+                    Appointment appointment = Appointment.find("patient.whatsappPhone = ?1 and clinic = ?2 and status = 'PENDING'", cleanPhone, clinic).firstResult();
                     if (appointment != null) {
                         appointment.status = AppointmentStatus.CONFIRMED;
                         appointment.persist();
@@ -52,7 +53,7 @@ public class MessageProcessorService {
                 String cleanPhoneCancel = phone.replace("@s.whatsapp.net", "");
                 Patient patientCancel = Patient.find("whatsappPhone", cleanPhoneCancel).firstResult();
                 if (patientCancel != null) {
-                    Appointment appointmentCancel = Appointment.find("patient = ?1 and status = 'PENDING'", patientCancel).firstResult();
+                    Appointment appointmentCancel = Appointment.find("patient.whatsappPhone = ?1 and clinic = ?2 and status = 'PENDING'", cleanPhoneCancel, clinic).firstResult();
                     if (appointmentCancel != null) {
                         appointmentCancel.status = AppointmentStatus.CANCELED;
                         appointmentCancel.persist();
@@ -72,7 +73,7 @@ public class MessageProcessorService {
                 String cleanPhoneReschedule = phone.replace("@s.whatsapp.net", "");
                 Patient patientReschedule = Patient.find("whatsappPhone", cleanPhoneReschedule).firstResult();
                 if (patientReschedule != null) {
-                    Appointment appointmentReschedule = Appointment.find("patient = ?1 and status = 'PENDING'", patientReschedule).firstResult();
+                    Appointment appointmentReschedule = Appointment.find("patient.whatsappPhone = ?1 and clinic = ?2 and status = 'PENDING'", cleanPhoneReschedule, clinic).firstResult();
                     if (appointmentReschedule != null) {
                         appointmentReschedule.status = AppointmentStatus.NEEDS_HUMAN;
                         appointmentReschedule.persist();

@@ -1,27 +1,43 @@
 package com.resource;
 
 import com.service.MessageProcessorService;
-import com.dto.WhatsAppWebhook;
+import com.domain.Clinic;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-@Path("/webhook/whatsapp")
+@Path("/api/webhook")
 public class WebhookResource {
 
     @Inject
     MessageProcessorService messageProcessorService;
 
-    @POST
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Response receiveWebhook(WhatsAppWebhook webhook) {
-        String phone = webhook.data().remoteJid();
-        String text = webhook.data().message().conversation();
+    public record MessagePayload(String phone, String text) {
+    }
 
-        messageProcessorService.processIncomingMessage(phone, text);
+    @POST
+    @Path("/{instanceName}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response receiveWebhook(
+            @PathParam("instanceName") String instanceName,
+            @HeaderParam("apikey") String apiKey,
+            MessagePayload payload) {
+
+        // Buscar clínica por instanceName
+        Clinic clinic = Clinic.find("instanceName", instanceName).firstResult();
+
+        // Validar: clínica existe e apiKey está correto
+        if (clinic == null || !apiKey.equals(clinic.webhookToken)) {
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+
+        // Processar mensagem
+        messageProcessorService.processIncomingMessage(payload.phone(), payload.text(), clinic);
 
         return Response.ok().build();
     }
