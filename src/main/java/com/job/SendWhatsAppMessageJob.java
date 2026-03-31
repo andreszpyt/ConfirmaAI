@@ -7,9 +7,12 @@ import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import com.domain.Appointment;
+import com.service.MessageSenderService;
 
 @ApplicationScoped
 public class SendWhatsAppMessageJob implements Job {
+
+    MessageSenderService messageSenderService;
 
     @Override
     @Transactional
@@ -18,7 +21,8 @@ public class SendWhatsAppMessageJob implements Job {
         String appointmentId = context.getJobDetail().getJobDataMap().getString("appointmentId");
         Appointment appointment = Appointment.findById(Long.parseLong(appointmentId));
         if (appointment != null) {
-            System.out.println("[QUARTZ] Disparando WhatsApp para " + appointment.patient.whatsappPhone + ": Olá " + appointment.patient.name + ", você confirma sua consulta? Responda Sim ou Não");
+            String message = "Olá " + appointment.patient.name + ", você confirma sua consulta na " + appointment.clinic.name + " amanhã?";
+            messageSenderService.sendWhatsAppMessage(appointment.patient.whatsappPhone, message);
         }
     }
 }
