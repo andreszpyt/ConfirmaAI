@@ -22,7 +22,7 @@ public class SendWhatsAppMessageJob implements Job {
         Appointment appointment = Appointment.findById(Long.parseLong(appointmentId));
         if (appointment != null) {
             String message = "Olá " + appointment.patient.name + ", você confirma sua consulta na " + appointment.clinic.name + " amanhã?";
-            messageSenderService.sendWhatsAppMessage(appointment.patient.whatsappPhone, message);
+            messageSenderService.sendWhatsAppMessage(appointment.patient.whatsappPhone, message, appointment.clinic);
         }
     }
 }

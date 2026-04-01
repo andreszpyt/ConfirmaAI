@@ -49,18 +49,15 @@ public class WebhookResource {
         String messageType = payload.data().messageType();
 
         if ("documentMessage".equals(messageType) && payload.data().message() != null && payload.data().message().base64() != null) {
+            String cleanPhone = phone.replace("@s.whatsapp.net", "");
             try {
                 byte[] decodedCsv = Base64.getDecoder().decode(payload.data().message().base64());
                 int scheduled = csvProcessorService.processAgendaCsv(decodedCsv, clinic);
-
-                String cleanPhone = phone.replace("@s.whatsapp.net", "");
-                messageSenderService.sendWhatsAppMessage(cleanPhone, "✅ Planilha recebida com sucesso! Processamos e agendamos " + scheduled + " confirmações.");
+                messageSenderService.sendWhatsAppMessage(cleanPhone, "✅ Planilha recebida com sucesso! Processamos e agendamos " + scheduled + " confirmações.", clinic);
             } catch (Exception e) {
                 System.err.println("Erro ao processar documento: " + e.getMessage());
+                messageSenderService.sendWhatsAppMessage(cleanPhone, "❌ Ops! Tivemos um problema ao ler sua planilha. Verifique se o arquivo está no formato CSV correto e tente novamente.", clinic);
             }
-        }
-        else if (payload.data().message() != null && payload.data().message().conversation() != null) {
-            messageProcessorService.processIncomingMessage(phone, payload.data().message().conversation(), clinic);
         }
 
         return Response.ok().build();
