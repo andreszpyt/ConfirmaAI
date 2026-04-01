@@ -12,5 +12,5 @@ public class Clinic extends PanacheEntity {
     public String instanceName;
     public String webhookToken;
     public boolean active = true;
-
+    public Integer confirmationLeadTimeHours = 24;
 }
