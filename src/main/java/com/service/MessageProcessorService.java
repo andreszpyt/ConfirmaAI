@@ -13,8 +13,6 @@ import jakarta.transaction.Transactional;
 @ApplicationScoped
 public class MessageProcessorService {
 
-    private static final String CLINIC_PHONE = "5585999999999";
-
     @Inject
     IntentExtractionService intentExtractionService;
 
@@ -47,18 +45,24 @@ public class MessageProcessorService {
         switch (result.action()) {
             case CONFIRM:
                 appointment.status = AppointmentStatus.CONFIRMED;
-                replyToPatient = "Ótimo! Sua consulta está confirmada. Nos vemos em breve.";
-                messageSenderService.sendWhatsAppMessage(CLINIC_PHONE, "Notificação: Consulta do paciente " + patient.name + " foi confirmada.");
+                replyToPatient = clinic.msgTemplateConfirm;
+                if (clinic.whatsappPhone != null) {
+                    messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "✅ Notificação: Consulta do paciente " + patient.name + " foi CONFIRMADA.", clinic);
+                }
                 break;
             case CANCEL:
                 appointment.status = AppointmentStatus.CANCELED;
-                replyToPatient = "Tudo bem, sua consulta foi cancelada. Obrigado por avisar!";
-                messageSenderService.sendWhatsAppMessage(CLINIC_PHONE, "Notificação: Consulta do paciente " + patient.name + " foi cancelada.");
+                replyToPatient = clinic.msgTemplateCancel;
+                if (clinic.whatsappPhone != null) {
+                    messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "❌ Notificação: Consulta do paciente " + patient.name + " foi CANCELADA.", clinic);
+                }
                 break;
             case RESCHEDULE:
                 appointment.status = AppointmentStatus.NEEDS_HUMAN;
-                replyToPatient = "Certo, um de nossos atendentes vai falar com você em instantes para encontrarmos um novo horário.";
-                messageSenderService.sendWhatsAppMessage(CLINIC_PHONE, "ALERTA: O paciente " + patient.name + " solicitou reagendamento.");
+                replyToPatient = clinic.msgTemplateReschedule;
+                if (clinic.whatsappPhone != null) {
+                    messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "⚠️ ALERTA: O paciente " + patient.name + " solicitou REAGENDAMENTO.", clinic);
+                }
                 break;
             default:
                 System.out.println("Intenção não reconhecida com segurança. Mantendo status atual.");
@@ -66,7 +70,7 @@ public class MessageProcessorService {
         }
 
         appointment.persist();
-        messageSenderService.sendWhatsAppMessage(cleanPhone, replyToPatient);
+        messageSenderService.sendWhatsAppMessage(cleanPhone, replyToPatient, clinic);
 
         if (appointment.quartzJobId != null) {
             try {
