@@ -13,6 +13,13 @@ public interface EvolutionApiClient {
     @Path("/message/sendText/{instance}")
     void sendMessage(@HeaderParam("apikey") String apiKey, @PathParam("instance") String instance, MessageRequest request);
 
-    record MessageRequest(String number, String text, int delay) {
+    @POST
+    @Path("/instance/create")
+    CreateInstanceResponse createInstance(@HeaderParam("apikey") String globalApiKey, CreateInstanceRequest request);
+
+    record MessageRequest(String number, String text, int delay) {}
+    record CreateInstanceRequest(String instanceName, String token, boolean qrcode) {}
+    record CreateInstanceResponse(InstanceData instance, String hash) {
+        public record InstanceData(String instanceName, String status) {}
     }
 }
