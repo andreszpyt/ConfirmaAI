@@ -10,6 +10,7 @@ import jakarta.transaction.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @ApplicationScoped
@@ -18,13 +19,16 @@ public class DailyBriefingJob {
     @Inject
     MessageSenderService messageSenderService;
 
-    @Scheduled(cron = "0 30 7 * * ?")
+    private static final ZoneId BRASIL_ZONE = ZoneId.of("America/Sao_Paulo");
+
+    @Scheduled(cron = "0 30 7 * * ?", timeZone = "America/Sao_Paulo")
     @Transactional
     public void sendMorningBriefing() {
         List<Clinic> activeClinics = Clinic.list("active", true);
 
-        LocalDateTime startOfDay = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
-        LocalDateTime endOfDay = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
+        LocalDate today = LocalDate.now(BRASIL_ZONE);
+        LocalDateTime startOfDay = LocalDateTime.of(today, LocalTime.MIN);
+        LocalDateTime endOfDay = LocalDateTime.of(today, LocalTime.MAX);
 
         for (Clinic clinic : activeClinics) {
             List<Appointment> todaysAppointments = Appointment.find("clinic = ?1 and scheduledAt between ?2 and ?3",

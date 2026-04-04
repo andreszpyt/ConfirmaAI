@@ -3,6 +3,7 @@ package com.config;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import io.quarkus.runtime.StartupEvent;
+import io.quarkus.arc.profile.UnlessBuildProfile;
 import jakarta.transaction.Transactional;
 import jakarta.inject.Inject;
 import com.domain.Clinic;
@@ -10,8 +11,10 @@ import com.domain.Patient;
 import com.domain.Appointment;
 import com.service.AppointmentSchedulerService;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @ApplicationScoped
+@UnlessBuildProfile("prod")
 public class StartupDataInit {
 
     @Inject
@@ -33,7 +36,7 @@ public class StartupDataInit {
             Appointment appointment = new Appointment();
             appointment.clinic = clinic;
             appointment.patient = patient;
-            appointment.scheduledAt = LocalDateTime.now().plusDays(1);
+            appointment.scheduledAt = LocalDateTime.now(ZoneId.of("America/Sao_Paulo")).plusDays(1);
             appointment.status = Appointment.AppointmentStatus.PENDING;
             appointment.persist();
 
