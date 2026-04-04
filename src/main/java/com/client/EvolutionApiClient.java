@@ -1,10 +1,7 @@
 package com.client;
 
+import jakarta.ws.rs.*;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.HeaderParam;
-import jakarta.ws.rs.PathParam;
 
 @RegisterRestClient(configKey = "evolution-api")
 public interface EvolutionApiClient {
@@ -22,4 +19,10 @@ public interface EvolutionApiClient {
     record CreateInstanceResponse(InstanceData instance, String hash) {
         public record InstanceData(String instanceName, String status) {}
     }
+
+    @GET
+    @Path("/instance/connect/{instance}")
+    ConnectInstanceResponse connectInstance(@HeaderParam("apikey") String globalApiKey, @PathParam("instance") String instance);
+
+    record ConnectInstanceResponse(String base64) {}
 }

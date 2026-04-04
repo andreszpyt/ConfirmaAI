@@ -5,10 +5,7 @@ import com.client.EvolutionApiClient;
 import com.client.EvolutionApiClient.CreateInstanceRequest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -25,6 +22,26 @@ public class ClinicResource {
 
     @ConfigProperty(name = "evolution-api.token")
     String globalApiKey;
+
+    @GET
+    @Path("/{id}/qrcode")
+    public Response getQrCode(@PathParam("id") Long id) {
+        Clinic clinic = Clinic.findById(id);
+        if (clinic == null) {
+            return Response.status(Response.Status.NOT_FOUND).entity("Clínica não encontrada").build();
+        }
+
+        try {
+            var response = evolutionApi.connectInstance(globalApiKey, clinic.instanceName);
+            if (response != null && response.base64() != null) {
+                return Response.ok(response.base64()).build();
+            }
+            return Response.status(Response.Status.BAD_REQUEST).entity("QR Code já lido ou instância desconectada.").build();
+        } catch (Exception e) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("Erro ao buscar QR Code: " + e.getMessage()).build();
+        }
+    }
 
     @POST
     @Transactional

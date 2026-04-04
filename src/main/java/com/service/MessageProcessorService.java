@@ -10,6 +10,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
+import java.util.List;
+import java.util.Arrays;
+
 @ApplicationScoped
 public class MessageProcessorService {
 
@@ -24,15 +27,20 @@ public class MessageProcessorService {
 
     @Transactional
     public void processIncomingMessage(String phone, String text, Clinic clinic) {
-        String cleanPhone = phone.replace("@s.whatsapp.net", "");
+        String cleanPhone = phone.replace("@s.whatsapp.net", "").replaceAll("\\D", "");
 
-        Patient patient = Patient.find("whatsappPhone", cleanPhone).firstResult();
+        List<String> phoneVariations = generatePhoneVariations(cleanPhone);
+        Patient patient = Patient.find("whatsappPhone IN ?1", phoneVariations).firstResult();
+
         if (patient == null) {
-            System.out.println("Paciente não encontrado para o número: " + cleanPhone);
+            System.out.println("Paciente não encontrado para o número (ou variações): " + cleanPhone);
             return;
         }
 
-        Appointment appointment = Appointment.find("patient.whatsappPhone = ?1 and clinic = ?2 and status = 'PENDING'", cleanPhone, clinic).firstResult();
+        Appointment appointment = Appointment.find(
+                "patient = ?1 and clinic = ?2 and status = 'PENDING' ORDER BY scheduledAt ASC",
+                patient, clinic).firstResult();
+
         if (appointment == null) {
             System.out.println("Nenhuma consulta PENDENTE encontrada para o paciente: " + patient.name);
             return;
@@ -70,6 +78,7 @@ public class MessageProcessorService {
         }
 
         appointment.persist();
+
         messageSenderService.sendWhatsAppMessage(cleanPhone, replyToPatient, clinic);
 
         if (appointment.quartzJobId != null) {
@@ -80,5 +89,20 @@ public class MessageProcessorService {
                 e.printStackTrace();
             }
         }
+    }
+
+
+    private List<String> generatePhoneVariations(String phone) {
+        if (phone.startsWith("55") && (phone.length() == 12 || phone.length() == 13)) {
+            String ddd = phone.substring(2, 4);
+            String number = phone.substring(4);
+
+            if (number.length() == 8) {
+                return Arrays.asList(phone, "55" + ddd + "9" + number);
+            } else if (number.length() == 9 && number.startsWith("9")) {
+                return Arrays.asList(phone, "55" + ddd + number.substring(1));
+            }
+        }
+        return Arrays.asList(phone);
     }
 }

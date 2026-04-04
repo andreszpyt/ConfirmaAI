@@ -3,12 +3,8 @@ package com.service;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.quartz.Scheduler;
-import org.quartz.JobDetail;
-import org.quartz.Trigger;
-import org.quartz.JobKey;
-import org.quartz.JobBuilder;
-import org.quartz.TriggerBuilder;
+import org.jboss.logging.Logger;
+import org.quartz.*;
 import com.domain.Appointment;
 import com.job.SendWhatsAppMessageJob;
 import java.time.LocalDateTime;
@@ -17,6 +13,9 @@ import java.util.Date;
 
 @ApplicationScoped
 public class AppointmentSchedulerService {
+
+    private static final Logger LOG = Logger.getLogger(AppointmentSchedulerService.class);
+    private static final ZoneId ZONE_ID = ZoneId.of("America/Fortaleza");
 
     @Inject
     Scheduler scheduler;
@@ -29,15 +28,14 @@ public class AppointmentSchedulerService {
                 .build();
 
         int leadTime = appointment.clinic.confirmationLeadTimeHours != null ? appointment.clinic.confirmationLeadTimeHours : 24;
-
         LocalDateTime targetDispatchTime = appointment.scheduledAt.minusHours(leadTime);
 
-        if (targetDispatchTime.isBefore(LocalDateTime.now())) {
-            System.out.println("Aviso: Upload atrasado. Agendando disparo imediato para consulta " + appointment.id);
-            targetDispatchTime = LocalDateTime.now().plusMinutes(1);
+        if (targetDispatchTime.isBefore(LocalDateTime.now(ZONE_ID))) {
+            LOG.warnf("Aviso: Upload atrasado. Agendando disparo imediato para consulta %d", appointment.id);
+            targetDispatchTime = LocalDateTime.now(ZONE_ID).plusMinutes(1);
         }
 
-        Date dispatchDate = Date.from(targetDispatchTime.atZone(ZoneId.systemDefault()).toInstant());
+        Date dispatchDate = Date.from(targetDispatchTime.atZone(ZONE_ID).toInstant());
 
         Trigger trigger = TriggerBuilder.newTrigger()
                 .withIdentity("trigger_" + appointment.id)
@@ -49,14 +47,13 @@ public class AppointmentSchedulerService {
         appointment.quartzJobId = jobDetail.getKey().getName();
         appointment.persist();
 
-        System.out.println("[QUARTZ] Agendado disparo da consulta " + appointment.id + " para: " + targetDispatchTime);
+        LOG.infof("[QUARTZ] Agendado disparo da consulta %d para: %s", appointment.id, targetDispatchTime);
     }
 
     public void cancelSchedule(String jobId) throws Exception {
         if (jobId != null) {
-            JobKey jobKey = new JobKey(jobId);
-            scheduler.deleteJob(jobKey);
-            System.out.println("[QUARTZ] Agendamento cancelado: " + jobId);
+            scheduler.deleteJob(new JobKey(jobId));
+            LOG.infof("[QUARTZ] Agendamento cancelado: %s", jobId);
         }
     }
 }
