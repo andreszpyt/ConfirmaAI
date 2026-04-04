@@ -2,6 +2,7 @@ package com.job;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
@@ -12,6 +13,7 @@ import com.service.MessageSenderService;
 @ApplicationScoped
 public class SendWhatsAppMessageJob implements Job {
 
+    @Inject
     MessageSenderService messageSenderService;
 
     @Override

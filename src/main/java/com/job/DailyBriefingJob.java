@@ -49,7 +49,7 @@ public class DailyBriefingJob {
                 ⏳ %d Aguardando resposta
                 """, confirmed, canceled, pending);
 
-            messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, report);
+            messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, report, clinic);
             System.out.println("[DAILY BRIEFING] Relatório enviado para a clínica " + clinic.name);
         }
     }

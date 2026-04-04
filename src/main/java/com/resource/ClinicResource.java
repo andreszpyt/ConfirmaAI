@@ -65,4 +65,37 @@ public class ClinicResource {
                     .build();
         }
     }
+
+    @GET
+    @Path("/{id}/connect-whatsapp")
+    public Response connectWhatsapp(@PathParam("id") Long id) {
+        Clinic clinic = Clinic.findById(id);
+        if (clinic == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity("Clínica não encontrada").build();
+        }
+
+        try {
+            var request = new EvolutionApiClient.CreateInstanceRequest(
+                    clinic.instanceName,
+                    clinic.evolutionApiToken,
+                    true
+            );
+
+            var apiResponse = evolutionApi.createInstance(globalApiKey, request);
+
+            if (apiResponse != null && apiResponse.qrcode() != null) {
+                return Response.ok(apiResponse.qrcode()).build();
+            }
+
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("A instância já pode estar conectada ou a API não retornou o QR Code.")
+                    .build();
+
+        } catch (Exception e) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("Erro ao conectar com Evolution API: " + e.getMessage())
+                    .build();
+        }
+    }
 }

@@ -14,10 +14,15 @@ public interface EvolutionApiClient {
     @Path("/instance/create")
     CreateInstanceResponse createInstance(@HeaderParam("apikey") String globalApiKey, CreateInstanceRequest request);
 
-    record MessageRequest(String number, String text, int delay) {}
     record CreateInstanceRequest(String instanceName, String token, boolean qrcode) {}
-    record CreateInstanceResponse(InstanceData instance, String hash) {
+
+    record CreateInstanceResponse(
+            InstanceData instance,
+            String hash,
+            QrCodeData qrcode
+    ) {
         public record InstanceData(String instanceName, String status) {}
+        public record QrCodeData(String base64) {}
     }
 
     @GET
