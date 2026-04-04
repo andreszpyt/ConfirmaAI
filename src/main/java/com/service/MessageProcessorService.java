@@ -9,12 +9,15 @@ import com.domain.Appointment.AppointmentStatus;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.jboss.logging.Logger;
 
 import java.util.List;
 import java.util.Arrays;
 
 @ApplicationScoped
 public class MessageProcessorService {
+
+    private static final Logger LOG = Logger.getLogger(MessageProcessorService.class);
 
     @Inject
     IntentExtractionService intentExtractionService;
@@ -33,7 +36,7 @@ public class MessageProcessorService {
         Patient patient = Patient.find("whatsappPhone IN ?1", phoneVariations).firstResult();
 
         if (patient == null) {
-            System.out.println("Paciente não encontrado para o número (ou variações): " + cleanPhone);
+            LOG.warnf("Paciente não encontrado para o número (ou variações): %s", cleanPhone);
             return;
         }
 
@@ -42,11 +45,29 @@ public class MessageProcessorService {
                 patient, clinic).firstResult();
 
         if (appointment == null) {
-            System.out.println("Nenhuma consulta PENDENTE encontrada para o paciente: " + patient.name);
+            LOG.infof("Nenhuma consulta PENDENTE encontrada para o paciente: %s", patient.name);
             return;
         }
 
-        IntentExtractionResult result = intentExtractionService.extractIntent(text);
+        IntentExtractionResult result = null;
+
+        try {
+            result = intentExtractionService.extractIntent(text);
+        } catch (Exception e) {
+            LOG.errorf(e, "Falha na IA ao extrair intenção para o paciente %s. Acionando fallback.", patient.name);
+
+            appointment.status = AppointmentStatus.NEEDS_HUMAN;
+            appointment.persist();
+
+            String fallbackReply = "Desculpe, nosso sistema está passando por uma instabilidade momentânea. Por favor, responda apenas com *SIM* para confirmar ou *NÃO* para cancelar a sua consulta.";
+            messageSenderService.sendWhatsAppMessage(cleanPhone, fallbackReply, clinic);
+
+            if (clinic.whatsappPhone != null) {
+                messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone,
+                        "⚠️ *ALERTA DO SISTEMA*: A IA falhou ao processar a resposta do paciente *" + patient.name + "*. Verifique o chat e atualize o status manualmente.", clinic);
+            }
+            return;
+        }
 
         String replyToPatient = "";
 
@@ -55,25 +76,25 @@ public class MessageProcessorService {
                 appointment.status = AppointmentStatus.CONFIRMED;
                 replyToPatient = clinic.msgTemplateConfirm;
                 if (clinic.whatsappPhone != null) {
-                    messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "✅ Notificação: Consulta do paciente " + patient.name + " foi CONFIRMADA.", clinic);
+                    messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "✅ Notificação: Consulta do paciente *" + patient.name + "* foi CONFIRMADA.", clinic);
                 }
                 break;
             case CANCEL:
                 appointment.status = AppointmentStatus.CANCELED;
                 replyToPatient = clinic.msgTemplateCancel;
                 if (clinic.whatsappPhone != null) {
-                    messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "❌ Notificação: Consulta do paciente " + patient.name + " foi CANCELADA.", clinic);
+                    messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "❌ Notificação: Consulta do paciente *" + patient.name + "* foi CANCELADA.", clinic);
                 }
                 break;
             case RESCHEDULE:
                 appointment.status = AppointmentStatus.NEEDS_HUMAN;
                 replyToPatient = clinic.msgTemplateReschedule;
                 if (clinic.whatsappPhone != null) {
-                    messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "⚠️ ALERTA: O paciente " + patient.name + " solicitou REAGENDAMENTO.", clinic);
+                    messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "⚠️ ALERTA: O paciente *" + patient.name + "* solicitou REAGENDAMENTO.", clinic);
                 }
                 break;
             default:
-                System.out.println("Intenção não reconhecida com segurança. Mantendo status atual.");
+                LOG.infof("Intenção não reconhecida com segurança para o paciente %s. Mantendo status atual.", patient.name);
                 return;
         }
 
@@ -84,13 +105,12 @@ public class MessageProcessorService {
         if (appointment.quartzJobId != null) {
             try {
                 appointmentSchedulerService.cancelSchedule(appointment.quartzJobId);
-                System.out.println("[QUARTZ] Agendamento cancelado para consulta " + appointment.id);
+                LOG.infof("[QUARTZ] Agendamento cancelado para consulta %d", appointment.id);
             } catch (Exception e) {
-                e.printStackTrace();
+                LOG.errorf(e, "Falha ao cancelar agendamento Quartz para consulta %d", appointment.id);
             }
         }
     }
-
 
     private List<String> generatePhoneVariations(String phone) {
         if (phone.startsWith("55") && (phone.length() == 12 || phone.length() == 13)) {
