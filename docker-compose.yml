@@ -6,7 +6,7 @@ services:
     container_name: confirma-postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-admin}
       POSTGRES_DB: confirmaai
       POSTGRES_INITDB_ARGS: "-E UTF8"
     ports:
@@ -21,10 +21,37 @@ services:
     networks:
       - confirma-network
 
+  confirma-app:
+    build:
+      context: .
+      dockerfile: src/main/docker/Dockerfile.jvm
+    container_name: confirma-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Banco de Dados - Apontando para o serviço 'postgres' na rede interna
+      DB_URL: jdbc:postgresql://postgres:5432/confirmaai
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # Integrações Externas
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL}
+      EVOLUTION_API_GLOBAL_TOKEN: ${EVOLUTION_API_GLOBAL_TOKEN}
+
+      # JVM & Quarkus Settings
+      JAVA_OPTIONS: "-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+      QUARKUS_HTTP_PORT: 8081
+    ports:
+      - "8081:8081"
+    networks:
+      - confirma-network
+    restart: always
+
 volumes:
   postgres_data:
 
 networks:
   confirma-network:
     driver: bridge
-
