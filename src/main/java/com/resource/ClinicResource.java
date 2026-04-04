@@ -47,9 +47,6 @@ public class ClinicResource {
     @Transactional
     public Response createClinic(Clinic clinicInput) {
 
-        clinicInput.webhookToken = UUID.randomUUID().toString();
-        clinicInput.evolutionApiToken = UUID.randomUUID().toString();
-
         String safeName = clinicInput.name.toLowerCase().replaceAll("[^a-z0-9]", "");
         clinicInput.instanceName = safeName + "-" + UUID.randomUUID().toString().substring(0, 5);
 
