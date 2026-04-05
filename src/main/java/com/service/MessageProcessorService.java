@@ -98,7 +98,15 @@ public class MessageProcessorService {
             appointment.persist();
 
             String fallbackReply = "Desculpe, nosso sistema está passando por uma instabilidade momentânea. Por favor, responda apenas com *SIM* para confirmar ou *NÃO* para cancelar a sua consulta.";
-            messageSenderService.sendWhatsAppMessage(cleanPhone, fallbackReply, clinic);
+            try {
+                messageSenderService.sendWhatsAppMessageThrowingOnFailure(cleanPhone, fallbackReply, clinic);
+            } catch (Exception sendEx) {
+                LOG.fatal(
+                        "Falha Crítica de Comunicação: envio da mensagem de fallback ao paciente falhou após retentativas.",
+                        sendEx);
+                appointment.communicationObservation = "Falha Crítica de Comunicação";
+                appointment.persist();
+            }
 
             if (clinic.whatsappPhone != null) {
                 messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone,

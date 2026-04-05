@@ -1,6 +1,7 @@
 package com.domain;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.EnumType;
@@ -22,6 +23,10 @@ public class Appointment extends PanacheEntity {
     public AppointmentStatus status = AppointmentStatus.PENDING;
 
     public String quartzJobId;
+
+    /** Observação operacional (ex.: falha crítica ao notificar o paciente). */
+    @Column(length = 512)
+    public String communicationObservation;
 
     public enum AppointmentStatus {
         PENDING,

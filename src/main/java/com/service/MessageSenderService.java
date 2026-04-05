@@ -18,10 +18,7 @@ public class MessageSenderService {
     @RestClient
     EvolutionApiClient evolutionApiClient;
 
-    @Retry(maxRetries = 3, delay = 2, delayUnit = ChronoUnit.SECONDS)
-    @Fallback(fallbackMethod = "handleDefinitiveFailure")
-    public void sendWhatsAppMessage(String phone, String text, Clinic clinic) {
-
+    private void sendWhatsAppMessageInternal(String phone, String text, Clinic clinic) {
         if (clinic.instanceName == null || clinic.evolutionApiToken == null) {
             LOG.errorf("Clínica %s não possui instanceName ou token configurados.", clinic.name);
             return;
@@ -31,6 +28,17 @@ public class MessageSenderService {
 
         evolutionApiClient.sendMessage(clinic.evolutionApiToken, clinic.instanceName, request);
         LOG.infof("Mensagem disparada com sucesso para %s via instância %s", phone, clinic.instanceName);
+    }
+
+    @Retry(maxRetries = 3, delay = 2, delayUnit = ChronoUnit.SECONDS)
+    @Fallback(fallbackMethod = "handleDefinitiveFailure")
+    public void sendWhatsAppMessage(String phone, String text, Clinic clinic) {
+        sendWhatsAppMessageInternal(phone, text, clinic);
+    }
+
+    @Retry(maxRetries = 3, delay = 2, delayUnit = ChronoUnit.SECONDS)
+    public void sendWhatsAppMessageThrowingOnFailure(String phone, String text, Clinic clinic) {
+        sendWhatsAppMessageInternal(phone, text, clinic);
     }
 
     public void handleDefinitiveFailure(String phone, String text, Clinic clinic, Exception e) {
