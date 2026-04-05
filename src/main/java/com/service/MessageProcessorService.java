@@ -21,6 +21,9 @@ public class MessageProcessorService {
 
     private static final Logger LOG = Logger.getLogger(MessageProcessorService.class);
 
+    private static final String DEFAULT_MSG_TEMPLATE_RESCHEDULE =
+            "Recebemos seu pedido de reagendamento. Um atendente entrará em contato em breve.";
+
     @Inject
     IntentExtractionService intentExtractionService;
 
@@ -150,7 +153,11 @@ public class MessageProcessorService {
             case RESCHEDULE:
                 StructuredEventLog.messageProcessIntent(LOG, result.action().name());
                 appointment.status = AppointmentStatus.NEEDS_HUMAN;
-                replyToPatient = clinic.msgTemplateReschedule;
+                String rescheduleTemplate = clinic.msgTemplateReschedule;
+                if (rescheduleTemplate == null || rescheduleTemplate.isBlank()) {
+                    rescheduleTemplate = DEFAULT_MSG_TEMPLATE_RESCHEDULE;
+                }
+                replyToPatient = rescheduleTemplate;
                 if (clinic.whatsappPhone != null) {
                     messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "⚠️ ALERTA: O paciente *" + patient.name + "* solicitou REAGENDAMENTO.", clinic);
                 }
