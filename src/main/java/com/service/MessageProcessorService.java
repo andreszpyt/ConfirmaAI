@@ -6,6 +6,7 @@ import com.domain.Clinic;
 import com.domain.Patient;
 import com.domain.Appointment;
 import com.domain.Appointment.AppointmentStatus;
+import com.logging.StructuredEventLog;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -32,26 +33,32 @@ public class MessageProcessorService {
     @Transactional
     public void processIncomingMessage(String phone, String text, Clinic clinic) {
         String cleanPhone = phone.replace("@s.whatsapp.net", "").replaceAll("\\D", "");
+        Long clinicId = clinic.id;
+        String appointmentIdForLog = "none";
 
         List<String> phoneVariations = generatePhoneVariations(cleanPhone);
         // Panache/Hibernate expande a coleção em parâmetros nomeados para JPQL "in ?1"
         List<Patient> patients = Patient.find("whatsappPhone in ?1", phoneVariations).list();
 
         if (patients.isEmpty()) {
-            LOG.warnf("Paciente não encontrado para o número (ou variações): %s", cleanPhone);
+            StructuredEventLog.messageProcess(LOG, "start", clinicId, cleanPhone, appointmentIdForLog, null);
+            StructuredEventLog.messageProcess(LOG, "end", clinicId, cleanPhone, appointmentIdForLog, "patient_not_found");
+            LOG.warnf(
+                    "Paciente não encontrado (clinicId=%d patientPhone=%s)",
+                    clinicId,
+                    StructuredEventLog.maskPhoneDigitsForLog(cleanPhone));
             return;
         }
 
         if (patients.size() > 1) {
             LOG.errorf(
                     "Múltiplos pacientes inesperados para as mesmas variações de WhatsApp (esperado no máximo 1). "
-                            + "cleanPhone=%s, phoneVariations=%s, clinicId=%d, matchCount=%d, detalhes=[%s]",
-                    cleanPhone,
-                    phoneVariations,
+                            + "clinicId=%d matchCount=%d patientPhone=%s detalhes=[%s]",
                     clinic.id,
                     patients.size(),
+                    StructuredEventLog.maskPhoneDigitsForLog(cleanPhone),
                     patients.stream()
-                            .map(p -> String.format("id=%d,name=%s,whatsappPhone=%s", p.id, p.name, p.whatsappPhone))
+                            .map(p -> String.format("id=%d", p.id))
                             .collect(Collectors.joining("; ")));
         }
 
@@ -64,35 +71,40 @@ public class MessageProcessorService {
                 AppointmentStatus.PENDING).list();
 
         if (pendingAppointments.isEmpty()) {
-            LOG.infof("Nenhuma consulta PENDENTE encontrada para o paciente: %s", patient.name);
+            StructuredEventLog.messageProcess(LOG, "start", clinicId, cleanPhone, appointmentIdForLog, null);
+            StructuredEventLog.messageProcess(LOG, "end", clinicId, cleanPhone, appointmentIdForLog, "no_pending_appointment");
+            LOG.infof("Nenhuma consulta PENDENTE (clinicId=%d patientId=%d)", clinicId, patient.id);
             return;
         }
 
         if (pendingAppointments.size() > 1) {
             LOG.errorf(
                     "Múltiplas consultas PENDING inesperadas para o mesmo paciente e clínica (esperado no máximo 1 ativa por fluxo). "
-                            + "patientId=%d, patientName=%s, clinicId=%d, matchCount=%d, detalhes=[%s]",
+                            + "patientId=%d clinicId=%d matchCount=%d detalhes=[%s]",
                     patient.id,
-                    patient.name,
                     clinic.id,
                     pendingAppointments.size(),
                     pendingAppointments.stream()
-                            .map(a -> String.format(
-                                    "id=%d,scheduledAt=%s,status=%s",
-                                    a.id,
-                                    a.scheduledAt,
-                                    a.status))
+                            .map(a -> String.format("id=%d,status=%s", a.id, a.status))
                             .collect(Collectors.joining("; ")));
         }
 
         Appointment appointment = pendingAppointments.getFirst();
+        appointmentIdForLog = String.valueOf(appointment.id);
+
+        StructuredEventLog.messageProcess(LOG, "start", clinicId, cleanPhone, appointmentIdForLog, null);
 
         IntentExtractionResult result = null;
 
         try {
             result = intentExtractionService.extractIntent(text);
         } catch (Exception e) {
-            LOG.errorf(e, "Falha na IA ao extrair intenção para o paciente %s. Acionando fallback.", patient.name);
+            LOG.errorf(
+                    e,
+                    "Falha na IA ao extrair intenção (clinicId=%d patientPhone=%s appointmentId=%s). Acionando fallback.",
+                    clinicId,
+                    StructuredEventLog.maskPhoneDigitsForLog(cleanPhone),
+                    appointmentIdForLog);
 
             appointment.status = AppointmentStatus.NEEDS_HUMAN;
             appointment.persist();
@@ -112,6 +124,7 @@ public class MessageProcessorService {
                 messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone,
                         "⚠️ *ALERTA DO SISTEMA*: A IA falhou ao processar a resposta do paciente *" + patient.name + "*. Verifique o chat e atualize o status manualmente.", clinic);
             }
+            StructuredEventLog.messageProcess(LOG, "end", clinicId, cleanPhone, appointmentIdForLog, "intent_extraction_failed");
             return;
         }
 
@@ -119,6 +132,7 @@ public class MessageProcessorService {
 
         switch (result.action()) {
             case CONFIRM:
+                StructuredEventLog.messageProcessIntent(LOG, result.action().name());
                 appointment.status = AppointmentStatus.CONFIRMED;
                 replyToPatient = clinic.msgTemplateConfirm;
                 if (clinic.whatsappPhone != null) {
@@ -126,6 +140,7 @@ public class MessageProcessorService {
                 }
                 break;
             case CANCEL:
+                StructuredEventLog.messageProcessIntent(LOG, result.action().name());
                 appointment.status = AppointmentStatus.CANCELED;
                 replyToPatient = clinic.msgTemplateCancel;
                 if (clinic.whatsappPhone != null) {
@@ -133,14 +148,30 @@ public class MessageProcessorService {
                 }
                 break;
             case RESCHEDULE:
+                StructuredEventLog.messageProcessIntent(LOG, result.action().name());
                 appointment.status = AppointmentStatus.NEEDS_HUMAN;
                 replyToPatient = clinic.msgTemplateReschedule;
                 if (clinic.whatsappPhone != null) {
                     messageSenderService.sendWhatsAppMessage(clinic.whatsappPhone, "⚠️ ALERTA: O paciente *" + patient.name + "* solicitou REAGENDAMENTO.", clinic);
                 }
                 break;
+            case ADD:
+                StructuredEventLog.messageProcessIntent(LOG, result.action().name());
+                LOG.infof(
+                        "Intenção ADD sem fluxo automatizado (clinicId=%d patientId=%d appointmentId=%s). Mantendo status atual.",
+                        clinicId,
+                        patient.id,
+                        appointmentIdForLog);
+                StructuredEventLog.messageProcess(LOG, "end", clinicId, cleanPhone, appointmentIdForLog, "add_not_handled");
+                return;
             default:
-                LOG.infof("Intenção não reconhecida com segurança para o paciente %s. Mantendo status atual.", patient.name);
+                StructuredEventLog.messageProcessIntent(LOG, result.action().name());
+                LOG.infof(
+                        "Intenção não reconhecida com segurança (clinicId=%d patientId=%d appointmentId=%s). Mantendo status atual.",
+                        clinicId,
+                        patient.id,
+                        appointmentIdForLog);
+                StructuredEventLog.messageProcess(LOG, "end", clinicId, cleanPhone, appointmentIdForLog, "unknown_intent");
                 return;
         }
 
@@ -156,6 +187,8 @@ public class MessageProcessorService {
                 LOG.errorf(e, "Falha ao cancelar agendamento Quartz para consulta %d", appointment.id);
             }
         }
+
+        StructuredEventLog.messageProcess(LOG, "end", clinicId, cleanPhone, appointmentIdForLog, "completed");
     }
 
     private List<String> generatePhoneVariations(String phone) {
