@@ -10,6 +10,9 @@ public interface EvolutionApiClient {
     @Path("/message/sendText/{instance}")
     void sendMessage(@HeaderParam("apikey") String apiKey, @PathParam("instance") String instance, MessageRequest request);
 
+    record MessageRequest(String number, String text, int delay) {}
+
+
     @POST
     @Path("/instance/create")
     CreateInstanceResponse createInstance(@HeaderParam("apikey") String globalApiKey, CreateInstanceRequest request);

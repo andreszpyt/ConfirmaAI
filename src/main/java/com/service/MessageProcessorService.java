@@ -11,8 +11,9 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
 
-import java.util.List;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class MessageProcessorService {
@@ -33,21 +34,58 @@ public class MessageProcessorService {
         String cleanPhone = phone.replace("@s.whatsapp.net", "").replaceAll("\\D", "");
 
         List<String> phoneVariations = generatePhoneVariations(cleanPhone);
-        Patient patient = Patient.find("whatsappPhone IN ?1", phoneVariations).firstResult();
+        // Panache/Hibernate expande a coleção em parâmetros nomeados para JPQL "in ?1"
+        List<Patient> patients = Patient.find("whatsappPhone in ?1", phoneVariations).list();
 
-        if (patient == null) {
+        if (patients.isEmpty()) {
             LOG.warnf("Paciente não encontrado para o número (ou variações): %s", cleanPhone);
             return;
         }
 
-        Appointment appointment = Appointment.find(
-                "patient = ?1 and clinic = ?2 and status = 'PENDING' ORDER BY scheduledAt ASC",
-                patient, clinic).firstResult();
+        if (patients.size() > 1) {
+            LOG.errorf(
+                    "Múltiplos pacientes inesperados para as mesmas variações de WhatsApp (esperado no máximo 1). "
+                            + "cleanPhone=%s, phoneVariations=%s, clinicId=%d, matchCount=%d, detalhes=[%s]",
+                    cleanPhone,
+                    phoneVariations,
+                    clinic.id,
+                    patients.size(),
+                    patients.stream()
+                            .map(p -> String.format("id=%d,name=%s,whatsappPhone=%s", p.id, p.name, p.whatsappPhone))
+                            .collect(Collectors.joining("; ")));
+        }
 
-        if (appointment == null) {
+        Patient patient = patients.getFirst();
+
+        List<Appointment> pendingAppointments = Appointment.find(
+                "patient = ?1 and clinic = ?2 and status = ?3 order by scheduledAt asc",
+                patient,
+                clinic,
+                AppointmentStatus.PENDING).list();
+
+        if (pendingAppointments.isEmpty()) {
             LOG.infof("Nenhuma consulta PENDENTE encontrada para o paciente: %s", patient.name);
             return;
         }
+
+        if (pendingAppointments.size() > 1) {
+            LOG.errorf(
+                    "Múltiplas consultas PENDING inesperadas para o mesmo paciente e clínica (esperado no máximo 1 ativa por fluxo). "
+                            + "patientId=%d, patientName=%s, clinicId=%d, matchCount=%d, detalhes=[%s]",
+                    patient.id,
+                    patient.name,
+                    clinic.id,
+                    pendingAppointments.size(),
+                    pendingAppointments.stream()
+                            .map(a -> String.format(
+                                    "id=%d,scheduledAt=%s,status=%s",
+                                    a.id,
+                                    a.scheduledAt,
+                                    a.status))
+                            .collect(Collectors.joining("; ")));
+        }
+
+        Appointment appointment = pendingAppointments.getFirst();
 
         IntentExtractionResult result = null;
 
