@@ -5,7 +5,6 @@ services:
     ports:
       - "8082:8080"
     volumes:
-      # Aqui dizemos ao container para usar os volumes
       - evolution_instances:/evolution/instances
       - evolution_store:/evolution/store
     environment:
@@ -20,8 +19,6 @@ services:
     networks:
       - confirma-network
 
-# AQUI ESTÁ A PARTE QUE FALTAVA!
-# Precisamos declarar os nomes dos volumes para o Docker criar eles
 volumes:
   evolution_instances:
   evolution_store:
